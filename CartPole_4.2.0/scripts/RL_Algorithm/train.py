@@ -5,6 +5,7 @@
 import argparse
 import sys
 import os
+import numpy as np
 
 from omni.isaac.lab.app import AppLauncher
 
@@ -25,7 +26,6 @@ parser.add_argument("--num_envs", type=int, default=1, help="Number of environme
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
-
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -48,6 +48,7 @@ import gymnasium as gym
 import torch
 from datetime import datetime
 import random
+from torch.utils.tensorboard import SummaryWriter  # TensorBoard logging
 
 from omni.isaac.lab.envs import (
     DirectMARLEnv,
@@ -88,6 +89,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # directory for logging into
     log_dir = os.path.join("logs", "sb3", args_cli.task, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    
+    # Initialize TensorBoard SummaryWriter
+    writer = SummaryWriter(log_dir=log_dir)
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
@@ -109,18 +113,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # hyperparameters
     num_of_action = 10
-    action_range = [-5.0, 5.0]  # [min, max]
+    action_range = [-2.5, 2.5]  # [min, max]
     discretize_state_weight = [10, 10, 10, 10]  # [pose_cart:int, pose_pole:int, vel_cart:int, vel_pole:int]
     learning_rate = 0.05
-    n_episodes = 1000
+    n_episodes = 1000000
     start_epsilon = 1.0
-    epsilon_decay = 0.999  # reduce the exploration over time
+    epsilon_decay = 0.999997  # reduce the exploration over time
     final_epsilon = 0.05
     discount = 0.99  # Set discount to a valid float (e.g., 0.99)
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
-    Algorithm_name = "MC"
-    agent = MC(
+    Algorithm_name = "Double_Q_Learning"
+    agent = Double_Q_Learning(
         num_of_action=num_of_action,
         action_range=action_range,
         discretize_state_weight=discretize_state_weight,
@@ -135,6 +139,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     obs, _ = env.reset()
     timestep = 0
     sum_reward = 0
+
     # simulate environment
     while simulation_app.is_running():
         # run everything in inference mode
@@ -157,26 +162,48 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     cumulative_reward += reward_value
                     
                     # agent.update()
-                    
-
                     agent.update(obs, action_idx, reward_value, next_obs, terminated or truncated)
 
                     done = terminated or truncated
                     obs = next_obs
                 
                 sum_reward += cumulative_reward
+
+                # Log per-episode metrics to TensorBoard
+                writer.add_scalar("Episode/Reward", cumulative_reward, episode)
+                writer.add_scalar("Episode/Epsilon", agent.epsilon, episode)
+                # Log a histogram of Q-values (if any) to monitor value distribution
+                if len(agent.q_values) > 0:
+                    q_vals = np.array(list(agent.q_values.values()))
+                    writer.add_histogram("Q_values", q_vals, episode)
+
+                # Every 100 episodes, print average reward and run an evaluation episode for deployment performance
                 if episode % 100 == 0:
                     print("avg_score: ", sum_reward / 100.0)
                     sum_reward = 0
-                    # print(agent.epsilon)
 
                     # Save Q-Learning agent
                     q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}_{discretize_state_weight[0]}_{discretize_state_weight[1]}.json"
                     full_path = os.path.join(f"q_value/{task_name}", Algorithm_name)
                     agent.save_q_value(full_path, q_value_file)
 
+                    # Deployment evaluation: run one episode with greedy policy (epsilon set to final value)
+                    saved_epsilon = agent.epsilon
+                    agent.epsilon = final_epsilon
+                    eval_obs, _ = env.reset()
+                    eval_done = False
+                    eval_reward = 0
+                    while not eval_done:
+                        eval_action, _ = agent.get_action(eval_obs)
+                        eval_next_obs, eval_r, eval_term, eval_trunc, _ = env.step(eval_action)
+                        eval_reward += eval_r.item()
+                        eval_done = eval_term or eval_trunc
+                        eval_obs = eval_next_obs
+                    writer.add_scalar("Deployment/EvalReward", eval_reward, episode)
+                    # Restore epsilon value
+                    agent.epsilon = saved_epsilon
+
                 agent.decay_epsilon()
-                # print(agent.epsilon)
             
         if args_cli.video:
             timestep += 1
@@ -188,6 +215,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         break
     # ==================================================================== #
 
+    # Close TensorBoard writer
+    writer.close()
     # close the simulator
     env.close()
 
