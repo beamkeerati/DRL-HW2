@@ -77,7 +77,7 @@ class MC(BaseAlgorithm):
                 self.q_values[state][a] += self.lr * (G - self.q_values[state][a])
             
             # Optionally, print the updated Q-values for debugging.
-            print(f"Q-value: {self.q_values}")
+            # print(f"Q-value: {self.q_values}")
             
             # Clear the episode histories after the update.
             self.obs_hist = []
