@@ -11,6 +11,9 @@ from omni.isaac.lab.app import AppLauncher
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from RL_Algorithm.Algorithm.Q_Learning import Q_Learning
+from RL_Algorithm.Algorithm.SARSA import SARSA 
+from RL_Algorithm.Algorithm.Double_Q_Learning import Double_Q_Learning
+from RL_Algorithm.Algorithm.MC import MC
 from tqdm import tqdm
 
 # add argparse arguments
@@ -105,17 +108,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # ========================= Can be modified ========================== #
 
     # hyperparameters
-    num_of_action = None
-    action_range = [None, None]  # [min, max]
-    discretize_state_weight = [None, None, None, None]  # [pose_cart:int, pose_pole:int, vel_cart:int, vel_pole:int]
-    learning_rate = None
-    n_episodes = None
-    start_epsilon = None
-    epsilon_decay = None  # reduce the exploration over time
-    final_epsilon = None
-    discount = None
+    num_of_action = 10
+    action_range = [-5.0, 5.0]  # [min, max]
+    discretize_state_weight = [10, 10, 10, 10]  # [pose_cart:int, pose_pole:int, vel_cart:int, vel_pole:int]
+    learning_rate = 0.05
+    n_episodes = 1000
+    start_epsilon = 1.0
+    epsilon_decay = 0.999  # reduce the exploration over time
+    final_epsilon = 0.05
+    discount = 0.99  # Set discount to a valid float (e.g., 0.99)
 
-    agent = Q_Learning(
+    task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
+    Algorithm_name = "MC"
+    agent = MC(
         num_of_action=num_of_action,
         action_range=action_range,
         discretize_state_weight=discretize_state_weight,
@@ -150,10 +155,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     reward_value = reward.item()
                     terminated_value = terminated.item() 
                     cumulative_reward += reward_value
+                    
+                    # agent.update()
+                    
 
-                    agent.update(
-                        #== put your code here ==#
-                    )
+                    agent.update(obs, action_idx, reward_value, next_obs, terminated or truncated)
 
                     done = terminated or truncated
                     obs = next_obs
@@ -162,14 +168,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 if episode % 100 == 0:
                     print("avg_score: ", sum_reward / 100.0)
                     sum_reward = 0
-                    print(agent.epsilon)
+                    # print(agent.epsilon)
+
+                    # Save Q-Learning agent
+                    q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}_{discretize_state_weight[0]}_{discretize_state_weight[1]}.json"
+                    full_path = os.path.join(f"q_value/{task_name}", Algorithm_name)
+                    agent.save_q_value(full_path, q_value_file)
+
                 agent.decay_epsilon()
-            
-            # Save Q-Learning agent
-            Algorithm_name = "Q_Learning"
-            q_value_file = "name.json"
-            full_path = os.path.join("q_value", Algorithm_name)
-            agent.save_model(full_path, q_value_file)
+                # print(agent.epsilon)
             
         if args_cli.video:
             timestep += 1

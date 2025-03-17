@@ -39,13 +39,46 @@ class SARSA(BaseAlgorithm):
             discount_factor=discount_factor,
         )
         
-    def update(
-        self,
-
-    ):
+    def update(self, obs: dict, action: int, reward: float, next_obs: dict, done: bool):
         """
-        Update Q-values using SARSA .
+        Update Q-values using SARSA.
 
         This method applies the SARSA update rule to improve policy decisions by updating the Q-table.
+        The update rule is defined as:
+        
+            Q(s, a) <- Q(s, a) + α * (r + γ * Q(s', a') - Q(s, a))
+        
+        where:
+            - s: current state (discretized)
+            - a: current action
+            - r: reward received
+            - s': next state (discretized)
+            - a': next action (selected internally using the current policy)
+            - α: learning rate (self.lr)
+            - γ: discount factor (self.discount_factor)
+
+        Args:
+            obs (dict): The current observation (state).
+            action (int): The discrete action taken in the current state.
+            reward (float): The reward received after taking the action.
+            next_obs (dict): The next observation (state).
+            done (bool): Flag indicating whether the episode has terminated.
         """
-        pass
+        # Discretize the current and next states.
+        state = self.discretize_state(obs)
+        next_state = self.discretize_state(next_obs)
+        
+        # Retrieve the current Q-value for the state-action pair.
+        current_q = self.q_values[state][action]
+        
+        if done:
+            # If the episode has terminated, use only the immediate reward.
+            target = reward
+        else:
+            # For SARSA, select the next action using the current policy.
+            # We only need the discrete next action index.
+            _, next_action = self.get_action(next_obs)
+            target = reward + self.discount_factor * self.q_values[next_state][next_action]
+        
+        # Update the Q-value using the SARSA update rule.
+        self.q_values[state][action] = current_q + self.lr * (target - current_q)
