@@ -39,7 +39,7 @@ class SARSA(BaseAlgorithm):
             discount_factor=discount_factor,
         )
         
-    def update(self, obs: dict, action: int, reward: float, next_obs: dict, done: bool):
+    def update(self, obs: dict, action: int, reward: float, next_obs: dict, next_action: int, done: bool):
         """
         Update Q-values using SARSA.
 
@@ -64,21 +64,11 @@ class SARSA(BaseAlgorithm):
             next_obs (dict): The next observation (state).
             done (bool): Flag indicating whether the episode has terminated.
         """
-        # Discretize the current and next states.
         state = self.discretize_state(obs)
         next_state = self.discretize_state(next_obs)
-        
-        # Retrieve the current Q-value for the state-action pair.
         current_q = self.q_values[state][action]
-        
         if done:
-            # If the episode has terminated, use only the immediate reward.
             target = reward
         else:
-            # For SARSA, select the next action using the current policy.
-            # We only need the discrete next action index.
-            _, next_action = self.get_action(next_obs)
             target = reward + self.discount_factor * self.q_values[next_state][next_action]
-        
-        # Update the Q-value using the SARSA update rule.
         self.q_values[state][action] = current_q + self.lr * (target - current_q)

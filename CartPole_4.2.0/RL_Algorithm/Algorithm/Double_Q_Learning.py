@@ -41,45 +41,52 @@ class Double_Q_Learning(BaseAlgorithm):
         
     def update(self, obs: dict, action: int, reward: float, next_obs: dict, done: bool):
         """
-        Update Q-values using SARSA.
+        Update Q-values using Double Q-Learning.
 
-        This method applies the SARSA update rule to improve policy decisions by updating the Q-table.
-        The update rule is defined as:
-
-            Q(s, a) <- Q(s, a) + α * (r + γ * Q(s', a') - Q(s, a))
-
-        where:
-            - s: current state (discretized)
-            - a: current action
-            - r: reward received
-            - s': next state (discretized)
-            - a': next action taken in the next state (selected by the policy)
-            - α: learning rate (self.lr)
-            - γ: discount factor (self.discount_factor)
+        This method applies the Double Q-Learning update rule:
+        
+            With 50% probability, update qa_values:
+                a_max = argmax_a qa_values(next_state)
+                target = r + γ * qb_values(next_state)[a_max]   (if not terminal)
+            Otherwise, update qb_values:
+                a_max = argmax_a qb_values(next_state)
+                target = r + γ * qa_values(next_state)[a_max]   (if not terminal)
+        
+        Finally, update the overall q_values as the average of qa_values and qb_values.
 
         Args:
-            obs (dict): The current observation (state) as a dictionary.
-            action (int): The discrete action taken in the current state.
+            obs (dict): The current observation (state).
+            action (int): The discrete action taken.
             reward (float): The reward received after taking the action.
-            next_obs (dict): The next observation (state) as a dictionary.
+            next_obs (dict): The next observation (state).
             done (bool): Flag indicating whether the episode has terminated.
         """
         # Discretize the current and next states.
         state = self.discretize_state(obs)
         next_state = self.discretize_state(next_obs)
-
-        # Retrieve the current Q-value for the state-action pair.
-        current_q = self.q_values[state][action]
-
-        if done:
-            # If the episode has terminated, use only the immediate reward.
-            target = reward
+        
+        # Randomly decide which Q-table to update.
+        if np.random.rand() < 0.5:
+            # Update qa_values.
+            current_q = self.qa_values[state][action]
+            if done:
+                target = reward
+            else:
+                a_max = int(np.argmax(self.qa_values[next_state]))
+                target = reward + self.discount_factor * self.qb_values[next_state][a_max]
+            self.qa_values[state][action] = current_q + self.lr * (target - current_q)
         else:
-            # For SARSA, select the next action using the current policy.
-            # We ignore the continuous action value and only need the discrete action index.
-            _, next_action = self.get_action(next_obs)
-            target = reward + self.discount_factor * self.q_values[next_state][next_action]
+            # Update qb_values.
+            current_q = self.qb_values[state][action]
+            if done:
+                target = reward
+            else:
+                a_max = int(np.argmax(self.qb_values[next_state]))
+                target = reward + self.discount_factor * self.qa_values[next_state][a_max]
+            self.qb_values[state][action] = current_q + self.lr * (target - current_q)
+        
+        # Update the overall Q-value as the average of qa_values and qb_values.
+        self.q_values[state][action] = (self.qa_values[state][action] + self.qb_values[state][action]) / 2.0
 
-        # Update the Q-value using the SARSA update rule.
-        self.q_values[state][action] = current_q + self.lr * (target - current_q)
+
 

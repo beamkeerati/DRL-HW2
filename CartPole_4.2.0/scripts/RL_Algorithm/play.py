@@ -84,17 +84,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # ==================================================================== #
     # ========================= Can be modified ========================== #
 
-    # hyperparameters
-    num_of_action = 20
-    action_range = [-5, 5.0]  # [min, max]
-    discretize_state_weight = [10, 10, 10, 10]  # [pose_cart:int, pose_pole:int, vel_cart:int, vel_pole:int]
-    learning_rate = 0.05
-    n_episodes = 1000
-    start_epsilon = 0.0
-    epsilon_decay = 0.99  # reduce the exploration over time
-    final_epsilon = 0.0
-    discount = 0.99  # Set discount to a valid float (e.g., 0.99)
-    
+    num_of_action = 7
+    action_range = [-15.0, 15.0]  # [min, max]
+    discretize_state_weight = [10, 10, 2, 2]  # [pose_cart:int, pose_pole:int, vel_cart:int, vel_pole:int]
+    learning_rate = 0.5
+    n_episodes = 10000
+    start_epsilon = 0.05
+    epsilon_decay = 0.9997  # reduce the exploration over time
+    final_epsilon = 0.05
+    discount = 0.1  # Set discount to a valid float (e.g., 0.99)
+
     agent = Q_Learning(
         num_of_action=num_of_action,
         action_range=action_range,
@@ -106,10 +105,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         discount_factor=discount
     )
 
+    task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "Q_Learning"  
-    q_value_file = "Q_Learning_900_10_5.0_10_10.json"
-    full_path = os.path.join("q_value/Stabilize", Algorithm_name)
-    print(f"Loading Q-values from {full_path}...")
+    episode = 0
+    q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}_{discretize_state_weight[0]}_{discretize_state_weight[1]}.json"
+    print(q_value_file)
+    full_path = os.path.join(f"q_value/{task_name}", Algorithm_name)
     agent.load_q_value(full_path, q_value_file)
 
     # reset environment

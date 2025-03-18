@@ -1,4 +1,4 @@
-"""Script to train RL agent."""
+"""Script to train RL agent using SARSA."""
 
 """Launch Isaac Sim Simulator first."""
 
@@ -11,8 +11,9 @@ from omni.isaac.lab.app import AppLauncher
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from RL_Algorithm.Algorithm.Q_Learning import Q_Learning
+# Import SARSA algorithm and other algorithms if needed
 from RL_Algorithm.Algorithm.SARSA import SARSA 
+from RL_Algorithm.Algorithm.Q_Learning import Q_Learning
 from RL_Algorithm.Algorithm.Double_Q_Learning import Double_Q_Learning
 from RL_Algorithm.Algorithm.MC import MC
 from tqdm import tqdm
@@ -74,7 +75,7 @@ torch.backends.cudnn.benchmark = False
 
 @hydra_task_config(args_cli.task, "sb3_cfg_entry_point")
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlOnPolicyRunnerCfg):
-    """Train with stable-baselines agent."""
+    """Train with an on-policy SARSA agent."""
     # randomly sample a seed if seed = -1
     if args_cli.seed == -1:
         args_cli.seed = random.randint(0, 10000)
@@ -83,7 +84,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
 
     # set the environment seed
-    # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg["seed"]
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 
@@ -109,7 +109,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # ==================================================================== #
-    # ========================= Can be modified ========================== #
+    # ========================= Agent Initialization ===================== #
 
     num_of_action = 7
     action_range = [-15.0, 15.0]  # [min, max]
@@ -119,11 +119,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     start_epsilon = 1.0
     epsilon_decay = 0.9997  # reduce the exploration over time
     final_epsilon = 0.05
-    discount = 0.9  # Set discount to a valid float (e.g., 0.99)
+    discount = 0.9  # discount factor
     
-    task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
-    Algorithm_name = "Q_Learning"
-    agent = Q_Learning(
+    task_name = str(args_cli.task).split('-')[0]  # e.g., Stabilize, SwingUp
+
+    # --- Modified: Use SARSA with proper on-policy update ---
+    Algorithm_name = "SARSA"
+    agent = SARSA(
         num_of_action=num_of_action,
         action_range=action_range,
         discretize_state_weight=discretize_state_weight,
@@ -134,93 +136,89 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         discount_factor=discount
     )
 
-    # reset environment
+    # reset environment and choose initial action
     obs, _ = env.reset()
+    action, action_idx = agent.get_action(obs)
     timestep = 0
     sum_reward = 0
 
-    # simulate environment
-    while simulation_app.is_running():
-        # run everything in inference mode
-        with torch.inference_mode():
-        
-            for episode in tqdm(range(n_episodes)):
-                obs, _ = env.reset()
-                done = False
-                cumulative_reward = 0
+    # simulate environment using the SARSA sequence:
+    # 1. Initialize state and action.
+    # 2. For each step, take the chosen action, observe reward and next state.
+    # 3. Choose the next action from next state.
+    # 4. Update Q(s,a) using: Q(s,a) <- Q(s,a) + α*(r + γ*Q(s',a') - Q(s,a))
+    for episode in tqdm(range(n_episodes)):
+        # For each episode, reset environment and get initial action
+        obs, _ = env.reset()
+        action, action_idx = agent.get_action(obs)
+        done = False
+        cumulative_reward = 0
 
-                while not done:
-                    # agent stepping
-                    action, action_idx = agent.get_action(obs)
+        while not done:
+            next_obs, reward, terminated, truncated, _ = env.step(action)
+            cumulative_reward += reward.item()
+            done = terminated or truncated
 
-                    # env stepping
-                    next_obs, reward, terminated, truncated, _ = env.step(action)
+            if not done:
+                next_action, next_action_idx = agent.get_action(next_obs)
+            else:
+                next_action, next_action_idx = None, None
 
-                    reward_value = reward.item()
-                    terminated_value = terminated.item() 
-                    cumulative_reward += reward_value
-                    
-                    # agent.update()
-                    agent.update(obs, action_idx, reward_value, next_obs, terminated or truncated)
+            # Update SARSA: pass the next action index explicitly to the update rule.
+            agent.update(obs, action_idx, reward.item(), next_obs, next_action_idx, done)
 
-                    done = terminated or truncated
-                    obs = next_obs
-                
-                sum_reward += cumulative_reward
+            # Update state and action for next iteration
+            obs = next_obs
+            action = next_action
+            action_idx = next_action_idx
 
-                # Log per-episode metrics to TensorBoard
-                writer.add_scalar("Episode/Reward", cumulative_reward, episode)
-                writer.add_scalar("Episode/Epsilon", agent.epsilon, episode)
-                # Log a histogram of Q-values (if any) to monitor value distribution
-                if len(agent.q_values) > 0:
-                    q_vals = np.array(list(agent.q_values.values()))
-                    writer.add_histogram("Q_values", q_vals, episode)
+        sum_reward += cumulative_reward
 
-                # Every 100 episodes, print average reward and run an evaluation episode for deployment performance
-                if episode % 100 == 0:
-                    print("avg_score: ", sum_reward / 100.0)
-                    sum_reward = 0
+        # Log per-episode metrics to TensorBoard
+        writer.add_scalar("Episode/Reward", cumulative_reward, episode)
+        writer.add_scalar("Episode/Epsilon", agent.epsilon, episode)
+        if len(agent.q_values) > 0:
+            q_vals = np.array(list(agent.q_values.values()))
+            writer.add_histogram("Q_values", q_vals, episode)
 
-                    # Save Q-Learning agent
-                    q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}_{discretize_state_weight[0]}_{discretize_state_weight[1]}.json"
-                    full_path = os.path.join(f"q_value/{task_name}", Algorithm_name)
-                    agent.save_q_value(full_path, q_value_file)
+        # Every 100 episodes, print average reward and run an evaluation episode
+        if episode % 100 == 0 and episode != 0:
+            print("avg_score: ", sum_reward / 100.0)
+            sum_reward = 0
 
-                    # Deployment evaluation: run one episode with greedy policy (epsilon set to final value)
-                    saved_epsilon = agent.epsilon
-                    agent.epsilon = final_epsilon
-                    eval_obs, _ = env.reset()
-                    eval_done = False
-                    eval_reward = 0
-                    while not eval_done:
-                        eval_action, _ = agent.get_action(eval_obs)
-                        eval_next_obs, eval_r, eval_term, eval_trunc, _ = env.step(eval_action)
-                        eval_reward += eval_r.item()
-                        eval_done = eval_term or eval_trunc
-                        eval_obs = eval_next_obs
-                    writer.add_scalar("Deployment/EvalReward", eval_reward, episode)
-                    # Restore epsilon value
-                    agent.epsilon = saved_epsilon
+            # Save SARSA agent
+            q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}_{discretize_state_weight[0]}_{discretize_state_weight[1]}.json"
+            full_path = os.path.join(f"q_value/{task_name}", Algorithm_name)
+            agent.save_q_value(full_path, q_value_file)
 
-                agent.decay_epsilon()
-            
+            # Deployment evaluation: run one episode with greedy policy (epsilon set to final value)
+            saved_epsilon = agent.epsilon
+            agent.epsilon = final_epsilon
+            eval_obs, _ = env.reset()
+            eval_done = False
+            eval_reward = 0
+            eval_action, eval_action_idx = agent.get_action(eval_obs)
+            while not eval_done:
+                eval_next_obs, eval_r, eval_term, eval_trunc, _ = env.step(eval_action)
+                eval_reward += eval_r.item()
+                eval_done = eval_term or eval_trunc
+                if not eval_done:
+                    eval_action, eval_action_idx = agent.get_action(eval_next_obs)
+                eval_obs = eval_next_obs
+            writer.add_scalar("Deployment/EvalReward", eval_reward, episode)
+            agent.epsilon = saved_epsilon
+
+        agent.decay_epsilon()
+
         if args_cli.video:
             timestep += 1
-            # Exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break
-        
-        print("!!! Training is complete !!!")
-        break
-    # ==================================================================== #
 
-    # Close TensorBoard writer
+    print("!!! Training is complete !!!")
     writer.close()
-    # close the simulator
     env.close()
 
 if __name__ == "__main__":
-    # run the main function
     main()
-    # close sim app
     simulation_app.close()

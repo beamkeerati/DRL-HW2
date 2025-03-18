@@ -201,6 +201,7 @@ class BaseAlgorithm():
                 'qa_values': qa_values_str_keys,
                 'qb_values': qb_values_str_keys,
             }
+            # print("model_params: ", model_params)
         elif self.control_type == ControlType.MONTE_CARLO:
             try:
                 q_values_str_keys = {str(k): v.tolist() for k, v in self.q_values.items()}
