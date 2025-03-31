@@ -61,7 +61,21 @@ To train each algorithm, head to [train.py](/CartPole_4.2.0/scripts/RL_Algorithm
 Algorithm_name = "<algorithm name>"
     agent = <algorithm name>(...
 ```
-To MC, Q_Learning or Double_Q_Learning.
+to MC, Q_Learning or Double_Q_Learning.
+
+--- 
+
+Starts with launching the `Isaaclab` environment
+
+```bash
+conda activate isaaclab
+```
+
+then browse to your workspace.
+
+```bash
+cd DRL-HW2/CartPole_4.2.0/
+```
 
 To train SARSA algorithm, leave the code as is and run the `train_sarsa.py` file in the terminal instead.
 
