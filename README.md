@@ -79,12 +79,12 @@ cd DRL-HW2/CartPole_4.2.0/
 
 To train SARSA algorithm, leave the code as is and run the `train_sarsa.py` file in the terminal instead.
 
-To train, either use `train.py` or `train_sarsa.py` in the code below.
+Otherwise, either use `train.py` or `train_sarsa.py` in the code below.
 ```bash
 python scripts/RL_Algorithm/train.py --task Stabilize-Isaac-Cartpole-v0
 ```
 
-Run this code in a seperate window to log the training result.
+With the same directory, run this code in a seperate window to log the training result.
 ```bash
 python -m tensorboard.main --logdir logs/sb3/Stabilize-Isaac-Cartpole-v0
 ```
@@ -93,7 +93,7 @@ python -m tensorboard.main --logdir logs/sb3/Stabilize-Isaac-Cartpole-v0
 
 ## 🔬 Experimenting
 
-This is the **baseline** configurations of 9 Hyperparameters used in this experiment. In essence, these parameters will not be changed.
+This is a **fixed** configurations of 4 Hyperparameters used in this experiment. In essence, these parameters will not be changed.
 
 1. **`num_of_action`**
 
@@ -159,6 +159,12 @@ discount = 0.9
 ```
 
 ---
+
+### Tuning
+
+1. **`discretize_state_weight`** will be the first parameter to be tuned. The meaning of each params are
+
+
 # temporary
 
  The goal is to understand how each parameters interacts within each algorithms and determine which algorithm is best suited for this cartpole problem.
