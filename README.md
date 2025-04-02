@@ -332,6 +332,106 @@ You probably notice our very low discrete state weight by now, when we try a hig
 
 ---
 
+**What did we get from this experiment? How does each parameter affect the learning process?**
+
+1. `num_of_action = 10`
+
+This variable defines the number of discrete actions available to the agent. For example, with num_of_action = 10, the agent can choose from 10 different actions between the range of -15.0 and 15.0 (as specified by action_range).
+
+A higher number of actions increases the granularity of control, allowing the agent to make finer adjustments. However, it also increases the size of the action space, which can slow down learning as the agent has to evaluate more actions.
+
+- Increase the number (e.g., 20): Gives the agent more control but makes learning slower due to the larger action space.
+
+- Decrease the number (e.g., 5): Speeds up learning but may reduce the agent's ability to make precise control adjustments.
+
+---
+
+2. `action_range = [-15.0, 15.0]`
+
+Defines the range of possible action values the agent can choose from, where -15.0 is the minimum action and 15.0 is the maximum.
+This defines the physical limits of the agent's actions, which directly affects how large the agent’s movement or control actions can be.
+
+- Increase the range (e.g., [-20.0, 20.0]): The agent can perform stronger actions, which may be necessary for environments requiring large movements or adjustments.
+
+- Decrease the range (e.g., [-10.0, 10.0]): Limits the control precision, potentially speeding up learning but reducing the agent's ability to perform larger corrective actions.
+
+---
+
+3. `n_episodes = 1000`
+
+Defines the total number of episodes the agent will run during training.
+More episodes provide more opportunities for the agent to explore and learn, but longer training can be time-consuming.
+
+- Increase the number (e.g., 5000): Provides the agent more time to explore and learn, which generally leads to better performance, though it requires more computation time.
+
+- Decrease the number (e.g., 500): Speeds up training but may result in less exploration and underfitting, potentially limiting the agent’s performance.
+
+---
+
+4. `start_epsilon = 1.0`
+   
+Defines the initial exploration rate (epsilon). A value of 1.0 means that the agent will initially explore randomly, and as it learns, it will exploit its knowledge more.
+A high epsilon ensures that the agent explores the environment at the beginning, helping it discover all possible actions. Over time, epsilon decays to encourage the agent to exploit the learned policy.
+
+- Increase the value (e.g., 1.2): Leads to more exploration in the early stages but may delay exploitation.
+
+- Decrease the value (e.g., 0.5): Encourages more immediate exploitation of the policy, which could result in faster learning but might prevent the agent from fully exploring the environment.
+
+---
+
+5. `discretize_state_weight = [1, 3, 1, 1]`
+
+Defines the number of bins used to discretize each of the four state variables (cart position, pole angle, cart velocity, and pole angular velocity).
+The state space discretization affects how finely the agent perceives the environment. Finer discretization captures more details but increases the size of the state space, which can slow down learning.
+
+- Increase the number (e.g., [10, 20, 5, 5]): Provides a more detailed representation of the state space, allowing the agent to learn more precise policies but increasing the learning time.
+
+- Decrease the number (e.g., [1, 2, 1, 1]): Speeds up learning but may result in a less accurate policy due to coarse representation.
+
+---
+
+6. `learning_rate = 0.25`
+
+Determines how much the Q-values are updated during each learning step. A higher learning rate means that updates to Q-values will be larger.
+A higher learning rate can make learning faster but may lead to instability, while a lower learning rate promotes more stable updates but can result in slower convergence.
+
+- Increase the value (e.g., 0.5): Speeds up learning but may cause instability, leading to fluctuating Q-values.
+
+- Decrease the value (e.g., 0.1): Slows down learning but improves stability, allowing the agent to converge more smoothly.
+
+---
+
+7. `epsilon_decay = 0.997`
+
+Controls the rate at which exploration (epsilon) decreases over time. A smaller value means the agent will decay its exploration rate more slowly, encouraging more exploration.
+Slower epsilon decay means the agent will continue exploring for longer, which can be useful for environments where the agent needs more exploration. However, it may delay the transition to exploitation.
+
+- Increase the value (e.g., 0.999): Slows down the decay, encouraging more exploration over a longer period, which can be useful if the environment is large or complex.
+
+- Decrease the value (e.g., 0.95): Decays exploration more quickly, focusing the agent on exploitation sooner, which could lead to faster convergence but might miss better strategies.
+
+---
+
+8. `final_epsilon = 0.05`
+
+Defines the minimum epsilon value after decay. This ensures that the agent will still have some level of exploration even after the decay process.
+A lower final epsilon value results in more exploitation and less exploration as the training progresses, but still allows for some random exploration.
+
+- Increase the value (e.g., 0.1): Leads to more exploration in the later stages of learning, which might help find better solutions at the cost of slower exploitation.
+
+- Decrease the value (e.g., 0.01): Leads to faster convergence to an optimal policy but with very little further exploration.
+  
+---
+
+9. `discount = 0.9`
+
+Defines how much future rewards are considered when updating Q-values. A higher discount factor gives more weight to future rewards.
+A high discount factor encourages the agent to consider long-term goals, while a lower value focuses on immediate rewards. This is crucial in environments where long-term planning is needed.
+
+- Increase the value (e.g., 0.95): Makes the agent focus more on long-term rewards, which is useful for tasks where the agent needs to plan ahead.
+
+- Decrease the value (e.g., 0.85): Encourages the agent to focus on immediate rewards, which can make learning faster but may prevent the agent from considering long-term consequences.
+
 ## Author
 
 Keerati Ubonmart 65340500003   
